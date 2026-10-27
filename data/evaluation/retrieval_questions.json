@@ -1,0 +1,242 @@
+[
+  {
+    "id": "Q001",
+    "question": "Comment la consommation électrique française corrigée du climat a-t-elle évolué en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      6
+    ]
+  },
+  {
+    "id": "Q002",
+    "question": "De combien la consommation des grands consommateurs industriels a-t-elle augmenté en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      8
+    ]
+  },
+  {
+    "id": "Q003",
+    "question": "Quel était le volume de consommation brute d’électricité en France en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      12
+    ]
+  },
+  {
+    "id": "Q004",
+    "question": "Quelle quantité totale d’électricité a été produite en France en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      16
+    ]
+  },
+  {
+    "id": "Q005",
+    "question": "Quel volume d’électricité nucléaire la France a-t-elle produit en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      19
+    ]
+  },
+  {
+    "id": "Q006",
+    "question": "Quel a été le niveau de production hydraulique française en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      23
+    ]
+  },
+  {
+    "id": "Q007",
+    "question": "Pourquoi la production photovoltaïque française a-t-elle progressé en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      33
+    ]
+  },
+  {
+    "id": "Q008",
+    "question": "Comment le prix spot moyen annuel de l’électricité française a-t-il évolué entre 2023 et 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      44
+    ]
+  },
+  {
+    "id": "Q009",
+    "question": "Quel a été le solde net des exportations françaises d’électricité en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      67
+    ]
+  },
+  {
+    "id": "Q010",
+    "question": "Quel niveau les émissions liées à la production électrique française ont-elles atteint en 2024 ?",
+    "source": "BE2024 - Rapport Complet.pdf",
+    "pages": [
+      90
+    ]
+  },
+  {
+    "id": "Q011",
+    "question": "Comment la consommation d’électricité française corrigée du climat a-t-elle évolué en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      6
+    ]
+  },
+  {
+    "id": "Q012",
+    "question": "Quelle a été la consommation brute d’électricité en France en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      10
+    ]
+  },
+  {
+    "id": "Q013",
+    "question": "Comment la consommation des grands consommateurs raccordés au réseau de transport a-t-elle évolué en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      13
+    ]
+  },
+  {
+    "id": "Q014",
+    "question": "Comment RTE décrit-il le poids et la progression de la consommation des centres de données en France ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      18
+    ]
+  },
+  {
+    "id": "Q015",
+    "question": "Quelle a été la production totale d’électricité française en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      21
+    ]
+  },
+  {
+    "id": "Q016",
+    "question": "Quel volume d’électricité nucléaire a été produit en France en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      24
+    ]
+  },
+  {
+    "id": "Q017",
+    "question": "Quels facteurs expliquent l’augmentation de la production solaire française en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      39
+    ]
+  },
+  {
+    "id": "Q018",
+    "question": "Quel était le prix spot annuel moyen de l’électricité en France en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      58
+    ]
+  },
+  {
+    "id": "Q019",
+    "question": "Pendant combien d’heures le prix spot de l’électricité a-t-il été négatif en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      68
+    ]
+  },
+  {
+    "id": "Q020",
+    "question": "Quel a été le solde exportateur net d’électricité de la France en 2025 ?",
+    "source": "BE2025 - Rapport Complet.pdf",
+    "pages": [
+      75
+    ]
+  },
+  {
+    "id": "Q021",
+    "question": "By how much did the European Power Benchmark fall in Q3 2023 compared with Q3 2022?",
+    "source": "entso-e_market_report_2024.pdf",
+    "pages": [
+      7
+    ]
+  },
+  {
+    "id": "Q022",
+    "question": "What reporting period does the ENTSO-E Market Report 2024 cover?",
+    "source": "entso-e_market_report_2024.pdf",
+    "pages": [
+      11
+    ]
+  },
+  {
+    "id": "Q023",
+    "question": "When did the daily joint auctions on the Moldova–Romania border go live?",
+    "source": "entso-e_market_report_2024.pdf",
+    "pages": [
+      24
+    ]
+  },
+  {
+    "id": "Q024",
+    "question": "Which committee cooperated on the market coupling chapter of the ENTSO-E Market Report 2024?",
+    "source": "entso-e_market_report_2024.pdf",
+    "pages": [
+      49
+    ]
+  },
+  {
+    "id": "Q025",
+    "question": "Which transmission system operator connected to the MARI platform in June 2023?",
+    "source": "entso-e_market_report_2024.pdf",
+    "pages": [
+      61
+    ]
+  },
+  {
+    "id": "Q026",
+    "question": "What were the main factors behind wholesale electricity price peaks in January and February 2025?",
+    "source": "entso-e_Market_report_2025.pdf",
+    "pages": [
+      7
+    ]
+  },
+  {
+    "id": "Q027",
+    "question": "Which European platform supports the activation of manual frequency restoration reserves (mFRR)?",
+    "source": "entso-e_Market_report_2025.pdf",
+    "pages": [
+      9
+    ]
+  },
+  {
+    "id": "Q028",
+    "question": "What two approaches are provided for allocating cross-zonal capacity to balancing capacity markets?",
+    "source": "entso-e_Market_report_2025.pdf",
+    "pages": [
+      15
+    ]
+  },
+  {
+    "id": "Q029",
+    "question": "Which Ukrainian borders introduced common daily auctions during the first quarter of 2024?",
+    "source": "entso-e_Market_report_2025.pdf",
+    "pages": [
+      19
+    ]
+  },
+  {
+    "id": "Q030",
+    "question": "What is the purpose of the PICASSO platform in the European electricity balancing market?",
+    "source": "entso-e_Market_report_2025.pdf",
+    "pages": [
+      82
+    ]
+  }
+]

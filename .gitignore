@@ -1,0 +1,97 @@
+# =====================================
+# Python
+# =====================================
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.coverage
+htmlcov/
+
+# =====================================
+# Environnements virtuels
+# =====================================
+.venv/
+venv/
+
+# =====================================
+# Clés API et secrets
+# =====================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# =====================================
+# Données RAG
+# =====================================
+# PDF sources
+data/raw/reports/
+
+# Chunks et données transformées
+data/processed/
+
+# Index vectoriels locaux
+data/indexes/
+storage/
+chroma_db/
+
+# =====================================
+# Bases de données locales
+# =====================================
+*.sqlite
+*.sqlite3
+*.db
+
+# =====================================
+# Logs et caches
+# =====================================
+logs/
+*.log
+.cache/
+
+# =====================================
+# IDE et système
+# =====================================
+.idea/
+.vscode/settings.json
+.DS_Store
+Thumbs.db
+
+# =====================================
+# Données Energy Intelligence
+# =====================================
+
+# Historical RTE data downloaded from API
+data/raw/rte/
+
+# Data quality reports and anomalies
+data/quality/
+
+# Generated Plotly charts
+data/outputs/
+
+# Evaluation results (generated files)
+data/evaluation/*_results.json
+
+# =====================================
+# Streamlit
+# =====================================
+.streamlit/secrets.toml
+
+# =====================================
+# Python build
+# =====================================
+build/
+dist/
+.ipynb_checkpoints/
+
+# =====================================
+# Temporary files
+# =====================================
+*.tmp
+*.bak
