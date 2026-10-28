@@ -728,6 +728,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "google-auth" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "langchain-community" },
@@ -758,6 +759,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.162.0" },
+    { name = "google-auth", specifier = ">=2.62.0" },
     { name = "google-genai", specifier = ">=2.33.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain-community", specifier = "==0.3.31" },

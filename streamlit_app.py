@@ -3,20 +3,27 @@ import os
 
 import httpx
 import streamlit as st
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request
+from google.oauth2 import id_token
 
 from energy_intelligence.conversation import limit_history
 
-# Internal URL used by Streamlit to call FastAPI
+
+# FastAPI backend URL
 API_URL = os.getenv(
     "ENERGY_API_URL",
     "http://127.0.0.1:8000",
 ).rstrip("/")
 
-# Public URL used by the user's browser to access charts
-API_PUBLIC_URL = os.getenv(
-    "ENERGY_API_PUBLIC_URL",
-    "http://127.0.0.1:8000",
-).rstrip("/")
+
+def api_headers() -> dict[str, str]:
+    """Authenticate with FastAPI when running on Cloud Run."""
+    if not os.getenv("K_SERVICE"):
+        return {}
+
+    token = id_token.fetch_id_token(Request(), API_URL)
+    return {"Authorization": f"Bearer {token}"}
 
 
 st.set_page_config(
@@ -32,30 +39,41 @@ if "messages" not in st.session_state:
 
 
 def check_backend() -> bool:
-    # Verify FastAPI availability
+    """Check FastAPI availability."""
     try:
         response = httpx.get(
             f"{API_URL}/health",
-            timeout=5.0,
+            headers=api_headers(),
+            timeout=10.0,
         )
         response.raise_for_status()
         return response.json().get("status") == "ok"
-    except (httpx.RequestError, httpx.HTTPStatusError):
+
+    except (httpx.HTTPError, GoogleAuthError, ValueError):
         return False
 
 
 def ask_backend(question: str) -> dict:
-    # Send the question to FastAPI and LangGraph
+    """Send the question and conversation history to FastAPI."""
     history = limit_history([
         {
             "role": message["role"],
-            "content": message["answer"] if message["role"] == "assistant" else message["content"],
+            "content": (
+                message["answer"]
+                if message["role"] == "assistant"
+                else message["content"]
+            ),
         }
         for message in st.session_state.messages[:-1]
     ])
+
     response = httpx.post(
         f"{API_URL}/ask",
-        json={"question": question, "history": history},
+        json={
+            "question": question,
+            "history": history,
+        },
+        headers=api_headers(),
         timeout=180.0,
     )
 
@@ -63,19 +81,37 @@ def ask_backend(question: str) -> dict:
     return response.json()
 
 
+def fetch_chart(chart_url: str) -> str:
+    """Fetch a generated chart through the authenticated backend."""
+    response = httpx.get(
+        f"{API_URL}{chart_url}",
+        headers=api_headers(),
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    return response.text
+
+
 def display_assistant_message(message: dict) -> None:
+    """Display an assistant response and its associated content."""
+
     # Display generated answer
     st.markdown(message["answer"])
 
+    # Display documentary sources
     sources = message.get("sources", [])
+
     if sources:
         with st.expander("Sources documentaires"):
             for source in sources:
                 st.text(
-                    f"[{source['id']}] {source['source']} — page PDF {source['page']}"
+                    f"[{source['id']}] "
+                    f"{source['source']} — "
+                    f"page PDF {source['page']}"
                 )
                 st.text(source["excerpt"])
 
+    # Display workflow route
     route_labels = {
         "data": "Data Analyst · PostgreSQL",
         "research": "Research Analyst · RAG",
@@ -83,31 +119,43 @@ def display_assistant_message(message: dict) -> None:
     }
 
     route = message.get("route", "")
+
     if route:
         st.caption(
             f"Workflow : {route_labels.get(route, route)}"
         )
 
-    # Embed interactive Plotly chart when available
+    # Display generated Plotly chart
     chart_url = message.get("chart_url")
 
     if (
         isinstance(chart_url, str)
         and chart_url.startswith("/charts/")
         and chart_url.endswith(".html")
+        and "/" not in chart_url[len("/charts/"):]
     ):
-        full_chart_url = f"{API_PUBLIC_URL}{chart_url}"
+        try:
+            chart_html = fetch_chart(chart_url)
 
-        st.iframe(
-            full_chart_url,
-            height=520,
-            width="stretch",
-        )
+            # HTML must come from our trusted chart generator
+            st.iframe(
+                chart_html,
+                height=520,
+                width="stretch",
+            )
 
-        st.link_button(
-            "Ouvrir le graphique",
-            full_chart_url,
-        )
+            st.download_button(
+                "Télécharger le graphique",
+                data=chart_html,
+                file_name=chart_url.rsplit("/", 1)[-1],
+                mime="text/html",
+                key=f"download_{chart_url}",
+            )
+
+        except (httpx.HTTPError, GoogleAuthError):
+            st.warning(
+                "Impossible de charger le graphique."
+            )
 
 
 # Sidebar
@@ -128,7 +176,8 @@ with st.sidebar:
     else:
         st.error("API déconnectée")
         st.caption(
-            "Démarre FastAPI sur http://127.0.0.1:8000"
+            "Impossible de joindre FastAPI. "
+            "Vérifiez l'URL du backend et ses autorisations."
         )
 
     st.divider()
@@ -165,7 +214,7 @@ st.markdown(
     "et les rapports RTE / ENTSO-E."
 )
 
-# Show example questions before the first interaction
+# Show example questions
 if not st.session_state.messages:
     st.info(
         "**Exemples de questions**\n\n"
@@ -210,14 +259,13 @@ if question:
 
         except httpx.HTTPStatusError as exc:
             st.error(
-                f"Erreur API : "
-                f"HTTP {exc.response.status_code}"
+                f"Erreur API : HTTP {exc.response.status_code}"
             )
 
-        except httpx.RequestError:
+        except (httpx.RequestError, GoogleAuthError):
             st.error(
                 "Impossible de contacter FastAPI. "
-                "Vérifiez que le backend est démarré."
+                "Vérifiez le backend et son authentification."
             )
 
         else:
