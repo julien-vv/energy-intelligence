@@ -42,7 +42,7 @@ def verify_reader(conn, role: str | None = None) -> None:
     row = conn.execute(READER_CHECK_SQL, (role,)).fetchone()
     if not row or row["safe"] is not True:
         raise SQLExecutionError(
-            "SQL_DATABASE_URL must use a dedicated non-owner role with SELECT-only "
+            "DATABASE_URL must use a dedicated non-owner role with SELECT-only "
             "access to public.rte_eco2mix and no role memberships or creation privileges."
         )
 
@@ -51,7 +51,7 @@ def execute_generated_query(database_url: str | None, query: str) -> dict:
     normalized = validate_sql(query)
     if not database_url:
         raise SQLExecutionError(
-            "Configure SQL_DATABASE_URL with the dedicated reader using "
+            "Configure DATABASE_URL with the dedicated reader using "
             "python -m energy_intelligence.setup_sql_reader."
         )
     try:

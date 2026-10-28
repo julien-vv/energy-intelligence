@@ -35,7 +35,7 @@ def _create_reader(admin_url: str, password: str) -> str:
         if exists:
             raise ReaderSetupError(
                 "The energy_analyst role already exists. Configure its existing "
-                "connection as SQL_DATABASE_URL; this command will not rotate its password."
+                "connection as DATABASE_URL; this command will not rotate its password."
             )
         database = conn.execute("SELECT current_database() AS name").fetchone()["name"]
         role = sql.Identifier(READER_ROLE)
@@ -82,7 +82,7 @@ def setup_reader(env_file: Path = Path(".env")) -> bool:
     """Return True for a new reader, False when an existing reader was verified."""
     env_file = env_file.resolve()
     values = dotenv_values(env_file)
-    reader_url = os.environ.get("SQL_DATABASE_URL") or values.get("SQL_DATABASE_URL")
+    reader_url = os.environ.get("DATABASE_URL") or values.get("DATABASE_URL")
     if reader_url:
         execute_generated_query(reader_url, "SELECT timestamp_utc FROM public.rte_eco2mix LIMIT 1")
         return False
@@ -104,9 +104,9 @@ def setup_reader(env_file: Path = Path(".env")) -> bool:
         reader_url = _create_reader(admin_url, secrets.token_urlsafe(32))
         created = True
         execute_generated_query(reader_url, "SELECT timestamp_utc FROM public.rte_eco2mix LIMIT 1")
-        success, _, _ = set_key(env_file, "SQL_DATABASE_URL", reader_url, quote_mode="always")
+        success, _, _ = set_key(env_file, "DATABASE_URL", reader_url, quote_mode="always")
         if not success:
-            raise ReaderSetupError("Could not save SQL_DATABASE_URL to the environment file.")
+            raise ReaderSetupError("Could not save DATABASE_URL to the environment file.")
     except (psycopg.Error, OSError, ValueError) as exc:
         if created:
             try:
@@ -140,7 +140,7 @@ def main() -> int:
         print("Reader setup failed. Verify configuration and administrator permissions.")
         return 1
     print(
-        "Dedicated SQL reader created and verified; SQL_DATABASE_URL saved."
+        "Dedicated SQL reader created and verified; DATABASE_URL saved."
         if created else "Existing SQL reader verified; configuration unchanged."
     )
     return 0

@@ -164,11 +164,11 @@ def build_graph():
         name="sql-analysis", as_type="tool", capture_input=False, capture_output=False
     )
     def data_analyst(state: AgentState) -> dict:
-        reader_url = getattr(settings, "sql_database_url", None)
+        reader_url = getattr(settings, "DATABASE_URL", None)
         payload = {"mode": "generated_sql", "data": [], "status": "error"}
         if not reader_url:
             payload["error"] = (
-                "SQL analysis is unavailable until SQL_DATABASE_URL is configured "
+                "SQL analysis is unavailable until DATABASE_URL is configured "
                 "with python -m energy_intelligence.setup_sql_reader."
             )
             get_client().update_current_span(
