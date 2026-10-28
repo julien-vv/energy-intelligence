@@ -1,12 +1,13 @@
 
-import psycopg
-from litellm import completion
-from pgvector.psycopg import register_vector
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 import litellm
+import psycopg
 from dotenv import load_dotenv
 from langfuse import get_client, observe
+from litellm import completion
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+from pgvector.psycopg import register_vector
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from energy_intelligence.rag.hybrid_search import hybrid_retrieve
 
 
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
     gemini_api_key: str
     database_url: str
     llm_model: str
+    sql_database_url: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

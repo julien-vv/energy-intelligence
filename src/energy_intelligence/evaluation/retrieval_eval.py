@@ -14,7 +14,6 @@ from energy_intelligence.rag.hybrid_search import (
     tokenize,
 )
 
-
 EVAL_PATH = (
     Path(__file__).resolve().parents[3]
     / "data"

@@ -5,7 +5,6 @@ import pymupdf
 from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
 
-
 REPORTS_DIR = (
     Path(__file__).resolve().parents[3]
     / "data"

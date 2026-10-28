@@ -4,10 +4,17 @@ import os
 import httpx
 import streamlit as st
 
+from energy_intelligence.conversation import limit_history
 
-# FastAPI backend configuration
+# Internal URL used by Streamlit to call FastAPI
 API_URL = os.getenv(
     "ENERGY_API_URL",
+    "http://127.0.0.1:8000",
+).rstrip("/")
+
+# Public URL used by the user's browser to access charts
+API_PUBLIC_URL = os.getenv(
+    "ENERGY_API_PUBLIC_URL",
     "http://127.0.0.1:8000",
 ).rstrip("/")
 
@@ -39,9 +46,16 @@ def check_backend() -> bool:
 
 def ask_backend(question: str) -> dict:
     # Send the question to FastAPI and LangGraph
+    history = limit_history([
+        {
+            "role": message["role"],
+            "content": message["answer"] if message["role"] == "assistant" else message["content"],
+        }
+        for message in st.session_state.messages[:-1]
+    ])
     response = httpx.post(
         f"{API_URL}/ask",
-        json={"question": question},
+        json={"question": question, "history": history},
         timeout=180.0,
     )
 
@@ -52,6 +66,15 @@ def ask_backend(question: str) -> dict:
 def display_assistant_message(message: dict) -> None:
     # Display generated answer
     st.markdown(message["answer"])
+
+    sources = message.get("sources", [])
+    if sources:
+        with st.expander("Sources documentaires"):
+            for source in sources:
+                st.text(
+                    f"[{source['id']}] {source['source']} — page PDF {source['page']}"
+                )
+                st.text(source["excerpt"])
 
     route_labels = {
         "data": "Data Analyst · PostgreSQL",
@@ -73,7 +96,7 @@ def display_assistant_message(message: dict) -> None:
         and chart_url.startswith("/charts/")
         and chart_url.endswith(".html")
     ):
-        full_chart_url = f"{API_URL}{chart_url}"
+        full_chart_url = f"{API_PUBLIC_URL}{chart_url}"
 
         st.iframe(
             full_chart_url,
@@ -181,38 +204,38 @@ if question:
         st.markdown(question)
 
     # Execute the LangGraph workflow
-    with st.chat_message("assistant"):
-        with st.spinner("Analyse en cours..."):
-            try:
-                result = ask_backend(question)
+    with st.chat_message("assistant"), st.spinner("Analyse en cours..."):
+        try:
+            result = ask_backend(question)
 
-            except httpx.HTTPStatusError as exc:
-                st.error(
-                    f"Erreur API : "
-                    f"HTTP {exc.response.status_code}"
-                )
+        except httpx.HTTPStatusError as exc:
+            st.error(
+                f"Erreur API : "
+                f"HTTP {exc.response.status_code}"
+            )
 
-            except httpx.RequestError:
-                st.error(
-                    "Impossible de contacter FastAPI. "
-                    "Vérifiez que le backend est démarré."
-                )
+        except httpx.RequestError:
+            st.error(
+                "Impossible de contacter FastAPI. "
+                "Vérifiez que le backend est démarré."
+            )
 
-            else:
-                assistant_message = {
-                    "role": "assistant",
-                    "answer": result.get(
-                        "answer",
-                        "Aucune réponse générée.",
-                    ),
-                    "route": result.get("route", ""),
-                    "chart_url": result.get("chart_url"),
-                }
+        else:
+            assistant_message = {
+                "role": "assistant",
+                "answer": result.get(
+                    "answer",
+                    "Aucune réponse générée.",
+                ),
+                "route": result.get("route", ""),
+                "chart_url": result.get("chart_url"),
+                "sources": result.get("sources", []),
+            }
 
-                st.session_state.messages.append(
-                    assistant_message
-                )
+            st.session_state.messages.append(
+                assistant_message
+            )
 
-                display_assistant_message(
-                    assistant_message
-                )
+            display_assistant_message(
+                assistant_message
+            )

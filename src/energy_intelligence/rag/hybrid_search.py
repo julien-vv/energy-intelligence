@@ -1,14 +1,16 @@
 
 import re
 import unicodedata
+from threading import Lock
 
 import psycopg
+from langfuse import observe
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from pgvector import Vector
 from pgvector.psycopg import register_vector
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from rank_bm25 import BM25Okapi
-from langfuse import observe
+
 
 class Settings(BaseSettings):
     gemini_api_key: str
@@ -67,101 +69,96 @@ def reciprocal_rank_fusion(rankings, k=60):
     return ranked_ids, scores
 
 
-@observe(
-    name="hybrid-retrieval",
-    capture_input=False,
-    capture_output=False,
-)
-def hybrid_retrieve(
-    question: str,
-    conn,
-    model,
-    top_k: int = 5,
-) -> list[dict]:
-    # 1. Load all indexed chunks
-    rows = conn.execute(
-        """
-        SELECT id, source, page, content
-        FROM rag_chunks
-        ORDER BY id
-        """
-    ).fetchall()
+class HybridRetriever:
+    """Reuse a corpus and BM25 index in RAM until this instance is discarded.
 
-    if not rows:
-        return []
+    Keep one instance per application workflow. Restart the backend after
+    importing documents to rebuild its keyword index from PostgreSQL.
+    """
 
-    # 2. Vector search with pgvector
-    query_embedding = Vector(
-        model.get_query_embedding(question)
+    def __init__(self):
+        self._rows = None
+        self._bm25 = None
+        self._load_lock = Lock()
+
+    def _load_corpus(self, conn):
+        if self._rows is not None:
+            return
+        with self._load_lock:
+            if self._rows is not None:
+                return
+            rows = tuple(conn.execute(
+                """
+                SELECT id, source, page, content
+                FROM rag_chunks
+                ORDER BY id
+                """
+            ).fetchall())
+            tokens = [tokenize(content) for _, _, _, content in rows]
+            # BM25 cannot index a corpus with no remaining tokens.
+            bm25 = BM25Okapi(tokens) if any(tokens) else None
+            self._bm25 = bm25
+            self._rows = rows
+
+    @observe(
+        name="hybrid-retrieval",
+        capture_input=False,
+        capture_output=False,
     )
+    def retrieve(self, question: str, conn, model, top_k: int = 5) -> list[dict]:
+        if top_k <= 0:
+            return []
+        self._load_corpus(conn)
+        rows = self._rows
+        if not rows:
+            return []
 
-    vector_rows = conn.execute(
-        """
-        SELECT id
-        FROM rag_chunks
-        ORDER BY embedding <=> %s
-        LIMIT 20
-        """,
-        (query_embedding,),
-    ).fetchall()
+        query_embedding = Vector(model.get_query_embedding(question))
+        vector_rows = conn.execute(
+            """
+            SELECT id, source, page, content
+            FROM rag_chunks
+            ORDER BY embedding <=> %s
+            LIMIT 20
+            """,
+            (query_embedding,),
+        ).fetchall()
+        vector_ranking = [row[0] for row in vector_rows]
 
-    vector_ranking = [
-        row[0] for row in vector_rows
-    ]
+        bm25_ranking = []
+        if self._bm25 is not None:
+            scores = self._bm25.get_scores(tokenize(question))
+            ranked_indices = sorted(
+                range(len(rows)),
+                key=lambda i: (-scores[i], rows[i][0]),
+            )
+            bm25_ranking = [
+                rows[i][0] for i in ranked_indices if scores[i] > 0
+            ][:20]
 
-    # 3. BM25 keyword search
-    tokenized_corpus = [
-        tokenize(content)
-        for _, _, _, content in rows
-    ]
-
-    bm25 = BM25Okapi(tokenized_corpus)
-    bm25_scores = bm25.get_scores(
-        tokenize(question)
-    )
-
-    ranked_indices = sorted(
-        range(len(rows)),
-        key=lambda i: (
-            -bm25_scores[i],
-            rows[i][0],
-        ),
-    )
-
-    bm25_ranking = [
-        rows[i][0]
-        for i in ranked_indices
-        if bm25_scores[i] > 0
-    ][:20]
-
-    # 4. Fuse vector and BM25 rankings
-    fused_ids, rrf_scores = reciprocal_rank_fusion(
-        [vector_ranking, bm25_ranking]
-    )
-
-    # 5. Map chunk IDs to their content
-    chunks_by_id = {
-        row[0]: row
-        for row in rows
-    }
-
-    # 6. Return the best chunks
-    results = []
-
-    for chunk_id in fused_ids[:top_k]:
-        _, source, page, content = chunks_by_id[chunk_id]
-
-        results.append(
-            {
+        fused_ids, rrf_scores = reciprocal_rank_fusion(
+            [vector_ranking, bm25_ranking]
+        )
+        chunks_by_id = {row[0]: row for row in rows}
+        # Include fresh vector matches even if documents were added since loading
+        # BM25. Its keyword coverage still requires restarting the application.
+        chunks_by_id.update({row[0]: row for row in vector_rows})
+        results = []
+        for chunk_id in fused_ids[:top_k]:
+            _, source, page, content = chunks_by_id[chunk_id]
+            results.append({
                 "id": chunk_id,
                 "source": source,
                 "page": page,
                 "content": content,
                 "score": rrf_scores[chunk_id],
-            }
-        )
+            })
+        return results
 
-    return results
+
+def hybrid_retrieve(question: str, conn, model, top_k: int = 5) -> list[dict]:
+    """Run an independent retrieval, as used by standalone scripts."""
+    return HybridRetriever().retrieve(question, conn, model, top_k)
 
 
 def main():

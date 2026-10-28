@@ -1,12 +1,12 @@
 
-from datetime import datetime
+import math
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
 import polars as pl
 import psycopg
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 API_URL = (
     "https://odre.opendatasoft.com/api/explore/v2.1/"
@@ -61,6 +61,20 @@ def transform(
     records: list[dict],
     quarantine_path: Path | None = None,
 ) -> pl.DataFrame:
+    if not records:
+        raise ValueError("No source measurements to transform")
+
+    # Equivalent offset representations must compare as the same instant.
+    normalized_records = []
+    for record in records:
+        timestamp = datetime.fromisoformat(record["date_heure"])
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise ValueError("Measurement timestamps must include a timezone")
+        timestamp = timestamp.astimezone(UTC)
+        if timestamp.second or timestamp.microsecond or timestamp.minute not in (0, 30):
+            raise ValueError("Measurements must fall on the UTC 30-minute grid")
+        normalized_records.append({**record, "date_heure": timestamp.isoformat()})
+    records = normalized_records
     # Select relevant electricity measurements
     df = pl.DataFrame(records, infer_schema_length=None)
 
@@ -74,6 +88,13 @@ def transform(
             pl.Float64,
             strict=False,
         )
+    )
+
+    # NaN/infinity must be missing readings rather than enter energy totals.
+    df = df.with_columns(
+        pl.when(pl.col(MEASURE_COLUMNS).is_finite())
+        .then(pl.col(MEASURE_COLUMNS))
+        .otherwise(None)
     )
 
     # Remove rows without measured consumption
@@ -147,7 +168,31 @@ def transform(
     return df
 
 
-def load(df: pl.DataFrame, database_url: str) -> None:
+def load(
+    df: pl.DataFrame,
+    database_url: str,
+    *,
+    period_start: datetime | None = None,
+    period_end: datetime | None = None,
+) -> None:
+    """Upsert measurements, or atomically replace an explicitly validated period."""
+    if df.is_empty():
+        raise ValueError("Refusing to load an empty measurement set")
+    if not {"date_heure", *MEASURE_COLUMNS}.issubset(df.columns):
+        raise ValueError("Missing required measurement columns")
+    if (period_start is None) != (period_end is None):
+        raise ValueError("Both period_start and period_end are required for a refresh")
+    if period_start is not None:
+        if (
+            period_start.tzinfo is None or period_start.utcoffset() is None
+            or period_end.tzinfo is None or period_end.utcoffset() is None
+        ):
+            raise ValueError("Refresh bounds must include a timezone")
+        period_start = period_start.astimezone(UTC)
+        period_end = period_end.astimezone(UTC)
+        if not timedelta(0) < period_end - period_start <= timedelta(days=366):
+            raise ValueError("Refresh period must be positive and at most 366 days")
+
     # Create the PostgreSQL table
     create_table_sql = """
         CREATE TABLE IF NOT EXISTS rte_eco2mix (
@@ -197,7 +242,9 @@ def load(df: pl.DataFrame, database_url: str) -> None:
     # Prepare PostgreSQL records
     rows = [
         (
-            datetime.fromisoformat(record["date_heure"]),
+            datetime.fromisoformat(
+                record["date_heure"]
+            ).astimezone(UTC),
             *[
                 record[column]
                 for column in MEASURE_COLUMNS
@@ -206,11 +253,34 @@ def load(df: pl.DataFrame, database_url: str) -> None:
         for record in df.iter_rows(named=True)
     ]
 
+    timestamps = [row[0] for row in rows]
+    if len(set(timestamps)) != len(timestamps):
+        raise ValueError("Duplicate measurement timestamps must be resolved before loading")
+    for timestamp, consumption, *production in rows:
+        if period_start is not None and not period_start <= timestamp < period_end:
+            raise ValueError("Measurement falls outside the requested refresh period")
+        if consumption is None:
+            raise ValueError("Consumption is required for a valid measurement")
+        if any(
+            value is not None and (not isinstance(value, (int, float)) or not math.isfinite(value))
+            for value in (consumption, *production)
+        ):
+            raise ValueError("Measurements must be finite numbers or missing")
+
     # Insert records in batches
     batch_size = 1000
 
     with psycopg.connect(database_url) as conn:
         conn.execute(create_table_sql)
+
+        if period_start is not None:
+            # A later quarantine or missing source row must not leave a stale
+            # measurement from a previous import. This deletion and all inserts
+            # share the connection transaction and roll back together on failure.
+            conn.execute(
+                "DELETE FROM rte_eco2mix WHERE timestamp_utc >= %s AND timestamp_utc < %s",
+                (period_start, period_end),
+            )
 
         with conn.cursor() as cursor:
             for start in range(0, len(rows), batch_size):

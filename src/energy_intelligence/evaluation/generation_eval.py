@@ -12,7 +12,6 @@ from pgvector.psycopg import register_vector
 from energy_intelligence.rag.hybrid_search import hybrid_retrieve
 from energy_intelligence.rag.rag_demo import Settings
 
-
 # Ground-truth questions verified against the PDF reports
 EVAL_CASES = [
     {

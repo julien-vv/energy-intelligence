@@ -1,4 +1,7 @@
 
+import argparse
+import calendar
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -6,10 +9,9 @@ import polars as pl
 
 from energy_intelligence.ingestion.rte_etl import (
     Settings,
-    transform,
     load,
+    transform,
 )
-
 
 API_URL = (
     "https://odre.opendatasoft.com/api/explore/v2.1/"
@@ -23,9 +25,17 @@ YEARS = [2024, 2025]
 
 # Use existing CSV files to avoid unnecessary downloads
 FORCE_DOWNLOAD = False
+MIN_YEAR_COVERAGE = 0.9
 
 
-def download_year(year: int) -> Path:
+def year_bounds(year: int) -> tuple[datetime, datetime]:
+    if isinstance(year, bool) or not isinstance(year, int) or not 2000 <= year < 9999:
+        raise ValueError("Year must be an integer between 2000 and 9998")
+    return datetime(year, 1, 1, tzinfo=UTC), datetime(year + 1, 1, 1, tzinfo=UTC)
+
+
+def download_year(year: int, *, refresh: bool = False) -> Path:
+    year_bounds(year)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     output_path = DATA_DIR / f"eco2mix_{year}.csv"
@@ -35,6 +45,7 @@ def download_year(year: int) -> Path:
         output_path.exists()
         and output_path.stat().st_size > 0
         and not FORCE_DOWNLOAD
+        and not refresh
     ):
         print(f"\nUsing existing file: {output_path}")
         return output_path
@@ -59,25 +70,24 @@ def download_year(year: int) -> Path:
         with httpx.Client(
             timeout=180.0,
             follow_redirects=True,
-        ) as client:
-            with client.stream(
-                "GET",
-                API_URL,
-                params=params,
-            ) as response:
+        ) as client, client.stream(
+            "GET",
+            API_URL,
+            params=params,
+        ) as response:
 
-                if response.status_code != 200:
-                    print(
-                        response.read().decode(
-                            "utf-8",
-                            errors="replace",
-                        )
+            if response.status_code != 200:
+                print(
+                    response.read().decode(
+                        "utf-8",
+                        errors="replace",
                     )
-                    response.raise_for_status()
+                )
+                response.raise_for_status()
 
-                with temporary_path.open("wb") as file:
-                    for chunk in response.iter_bytes():
-                        file.write(chunk)
+            with temporary_path.open("wb") as file:
+                for chunk in response.iter_bytes():
+                    file.write(chunk)
 
         temporary_path.replace(output_path)
 
@@ -89,9 +99,10 @@ def download_year(year: int) -> Path:
     return output_path
 
 
-def process_year(year: int, database_url: str) -> None:
+def process_year(year: int, database_url: str, *, refresh: bool = False) -> None:
+    period_start, period_end = year_bounds(year)
     # 1. Extract historical data
-    csv_path = download_year(year)
+    csv_path = download_year(year, refresh=refresh)
 
     df = pl.read_csv(
         csv_path,
@@ -105,16 +116,20 @@ def process_year(year: int, database_url: str) -> None:
         raise ValueError(f"No data found for {year}")
 
     # 2. Transform and handle data-quality issues
-    quarantine_path = (
-        QUALITY_DIR / f"rte_conflicts_{year}.csv"
+    quarantine_path = QUALITY_DIR / (
+        f"rte_conflicts_{year}_{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}.csv"
     )
 
-    # Remove an obsolete quarantine report
-    if quarantine_path.exists():
-        quarantine_path.unlink()
+    records = df.to_dicts()
+    for record in records:
+        timestamp = datetime.fromisoformat(
+            record["date_heure"]
+        ).astimezone(UTC)
+        if not period_start <= timestamp < period_end:
+            raise ValueError(f"Source measurement falls outside UTC year {year}")
 
     cleaned_df = transform(
-        df.to_dicts(),
+        records,
         quarantine_path=quarantine_path,
     )
 
@@ -123,17 +138,32 @@ def process_year(year: int, database_url: str) -> None:
             f"No valid measurements for {year}"
         )
 
+    expected = (366 if calendar.isleap(year) else 365) * 48
+    coverage = cleaned_df.height / expected
+    print(f"Year {year} valid coverage: {cleaned_df.height}/{expected} ({coverage:.2%})")
+    if coverage < MIN_YEAR_COVERAGE:
+        raise ValueError(
+            f"Refusing to replace {year}: valid measurement coverage {coverage:.2%} "
+            f"is below {MIN_YEAR_COVERAGE:.0%}; inspect or refresh the source CSV"
+        )
+
     # 3. Load into Neon PostgreSQL
-    load(cleaned_df, database_url)
+    load(
+        cleaned_df, database_url,
+        period_start=period_start, period_end=period_end,
+    )
 
     print(f"Year {year} completed.")
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Import validated historical RTE measurements")
+    parser.add_argument("--refresh", action="store_true", help="Download fresh CSV files instead of reusing the cache")
+    args = parser.parse_args()
     settings = Settings()
 
     for year in YEARS:
-        process_year(year, settings.database_url)
+        process_year(year, settings.database_url, refresh=args.refresh)
 
     print("\nHistorical RTE ingestion completed.")
 

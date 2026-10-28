@@ -193,6 +193,12 @@ The retrieval pipeline combines:
 
 The retrieved context is passed to Gemini to generate grounded answers.
 
+FastAPI keeps the document corpus and BM25 index in Python RAM after the first
+document search. Subsequent questions reuse that index; vector search still runs
+against PostgreSQL for each question. Restart FastAPI after importing or changing
+documents to refresh BM25. Closing and reopening Streamlit alone does not refresh
+the backend's index.
+
 ## Evaluation
 
 ### Retrieval Benchmark
@@ -219,11 +225,16 @@ These results measure the presence of expected values and reference pages. They 
 
 ### Observability
 
-Langfuse has been integrated into the RAG pipeline to inspect:
-- Retrieval operations
-- LLM requests
-- Execution latency
-- Token usage and estimated costs, where available
+Langfuse observes the complete workflow, including question rewriting and
+routing, generated SQL analysis, document retrieval, answer synthesis, and chart
+generation. LLM observations include model names and token usage when LiteLLM
+returns it.
+
+Trace inputs and outputs are disabled so user questions, conversation history,
+document excerpts, SQL text, and result rows are not captured. Traces contain
+stage names and operational metadata such as route, row/source counts, status,
+and whether a chart was created. Configure the optional Langfuse keys below to
+send traces to your Langfuse project.
 
 Full LangGraph workflow observability is planned.
 
@@ -359,6 +370,14 @@ Returns the API status.
 
 `POST /ask`
 
+Requests may include an optional `history` list containing up to six recent
+messages, each with `role` (`user` or `assistant`) and `content` (up to 4,000
+characters). Streamlit sends this automatically, excluding the current question
+from the history. The workflow resolves follow-up references into a standalone
+question before routing and retrieval. Prior answers help interpret references;
+new SQL results and retrieved excerpts provide the evidence for the new answer.
+Requests without history continue to work independently.
+
 Example request:
 
 ```json
@@ -406,7 +425,8 @@ This project is a functional local prototype, with several areas planned for imp
 - **Energy calculations:** TWh values are estimated from available 30-minute power measurements and may differ from official annual totals.
 - **Annual boundaries:** SQL aggregations currently use UTC calendar boundaries.
 - **RAG evaluation:** the evaluation dataset remains relatively small, and automated faithfulness evaluation has not been completed.
-- **Conversation memory:** Streamlit displays session history, but each backend question is currently processed independently.
+- **Conversation context:** the last six messages support follow-up questions. History remains in the Streamlit session and is not persisted by FastAPI; clearing the conversation starts a fresh context. Rewriting adds one LLM call when history is provided.
+- **BM25 refresh:** the keyword index is held in backend RAM. Restart FastAPI after adding, editing, or removing documents; automatic refresh is deferred.
 - **Visualization:** automatic charts currently support a single recognized metric and yearly or monthly aggregation.
 - **Deployment:** the application currently runs locally and is not yet configured for public production use.
 
@@ -422,7 +442,7 @@ This project is a functional local prototype, with several areas planned for imp
 - [x] FastAPI backend
 - [x] Streamlit interface
 - [ ] Automated tests and workflow validation
-- [ ] Extended Langfuse observability
+- [x] Extended Langfuse observability
 - [ ] Improved SQL analysis tools
 - [ ] Additional energy datasets and analytical capabilities
 - [ ] Docker containerization

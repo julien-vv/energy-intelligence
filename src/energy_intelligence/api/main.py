@@ -1,12 +1,15 @@
-
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from energy_intelligence.agents.workflow import build_graph
-
+from energy_intelligence.agents.workflow import build_graph, run_workflow
+from energy_intelligence.conversation import (
+    MAX_HISTORY_MESSAGE_CHARS,
+    MAX_HISTORY_MESSAGES,
+)
 
 # Directory containing generated Plotly charts
 CHART_DIR = Path("data/outputs").resolve()
@@ -29,14 +32,30 @@ app.mount(
 graph = build_graph()
 
 
+class ConversationMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=MAX_HISTORY_MESSAGE_CHARS)
+
+
 class QuestionRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
+    history: list[ConversationMessage] = Field(
+        default_factory=list, max_length=MAX_HISTORY_MESSAGES
+    )
+
+
+class DocumentSource(BaseModel):
+    id: int
+    source: str
+    page: int
+    excerpt: str
 
 
 class QuestionResponse(BaseModel):
     answer: str
     route: str
     chart_url: str | None = None
+    sources: list[DocumentSource] = Field(default_factory=list)
 
 
 @app.get("/health")
@@ -48,9 +67,11 @@ def health():
 @app.post("/ask", response_model=QuestionResponse)
 def ask(request: QuestionRequest):
     # Execute the existing LangGraph workflow
-    result = graph.invoke({
-        "question": request.question,
-    })
+    result = run_workflow(
+        graph,
+        request.question,
+        [message.model_dump() for message in request.history],
+    )
 
     chart_url = None
     chart_path = result.get("chart_path")
@@ -70,4 +91,5 @@ def ask(request: QuestionRequest):
         answer=result["answer"],
         route=result["route"],
         chart_url=chart_url,
+        sources=result.get("sources", []),
     )
